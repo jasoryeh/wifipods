@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<!-- 
+  WifiPods ~ wifipods.jasoryeh.repl.co
+
+  by @jasoryeh (GitHub), published June 2020.
+
+  This is an open source project designed to create a "poor-mans-airpods" that utilizes your computer, and your phone to create a wireless headset out of existing headsets.
+
+  Utilizes modern browser technologies, therefore we require a modern browser in order to properly use these features.
+-->
+<html>
+
+<head>
+	<title>WifiPods</title>
+	<!-- HTTPS only required, chrome set these features for secure connections only. -->
+	<script>
+		if (!location.href.startsWith("https")) {
+      alert("This website requires HTTPs for all features to function correctly! Please consider connecting to this site from HTTPs.");
+      //location.href = location.href.replace("http", "https");
+    }
+	</script>
+
+	<script src="https://unpkg.com/peerjs@1.0.0/dist/peerjs.min.js">
+	</script>
+</head>
+
+<body style="font-family: Lato, sans-serif; margin: 0;">
+	<div class="title" style="height: 3rem; width: 100vw; position: fixed; top: 0; left: 0; background-color: coral; display: flex; line-height: 3rem;">
+		<div style="width: 15%; font-size: 12px; padding-left: 20px;">
+			<h1 style="margin: 0;">WifiPods</h1>
+		</div>
+		<div style="width: 85%; font-size: 8px; text-align: right; padding-right: 20px;">Wireless Pods for people who neither have bluetooth or wireless earbuds but do have a wireless device with WebRTC support and a computer with Chrome/Edge Beta/Chromium.</div>
+	</div>
+	<div class="interface" style="display: flex; flex-wrap: wrap; margin-top: 3rem;">
+		<div style="width: 60%; padding-left: 20px; padding-right: 20px;">
+			<h2>Status</h2>
+			<p>Mode: <span id="mode">waiting for action</span></p>
+      <p id="id">Local peer not connected yet.</p>
+      <p id="remoteID">Remote peer not connected.</p>
+      <audio controls id="stream"></audio>
+      <br />
+      <h2>Settings</h2>
+      <h3 style="margin-bottom: 0;">Output</h3>
+      <small style="font-size: 10px"><i>(important for servers, your Virtual Audio Cable Device if you wish to use a microphone)</i></small>
+      <br/>
+      <select id="output"></select>
+      <br/>
+      <h3 style="margin-bottom: 0;">Input</h3>
+      <small style="font-size: 10px"><i>(important for clients, streamed to server to output to Virtual Audio Cable)</i></small>
+      <br/>
+      <select id="input"></select>
+      <br />
+      <br />
+      <small><b>Hint!</b> Stuck on "waiting for action" mode or want to reset? Press this button <b>OR READ THE RIGHT PANE</b></small>
+      <br /><br />
+      <!-- In order to start, or change the type of service you want the app to currently run as (client, server) -->
+      <button onclick="start();" style=" border: solid 1px; padding: 1rem; border: 0; font-family: Lato, sans-serif; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; background-color: #777777;">Change mode</button>
+      <!-- Button 2 - Reload Devices in case device permissions were glitched, or devices were not detected properly -->
+      <button onclick="reloadDevs();"
+        style=" border: solid 1px; padding: 1rem; border: 0; font-family: Lato, sans-serif; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; background-color: coral;">Reload Devices</button>
+    </div>
+    <div style="width: 30%; padding-left: 20px; padding-right: 20px;">
+      <h2>Prerequsites</h2>
+      <ol style="font-size: 14px;">
+        <li>One server (sender device, or where you want to listen to)</li>
+        <li>One client (receiver device, or where you would like to listen to)</li>
+        <li>An internet connection</li>
+        <li>A supported browser for the server that supports WebRTC and screen share with aurio</li>
+      </ol>
+      <h2>Instructions</h2>
+      <h3>Client</h3>
+      <ol style="font-size: 14px;">
+        <li>On the <b>client</b> device, press the "change mode" button</li>
+        <li>Leave the prompt box empty and press ok (accept microphone permissions to send microphone)</li>
+        <li>Press "reload devices" to detect newly allowed devices, and select the correct microphone</li>
+      </ol>
+      <h3>Server</h3>
+      <ol style="font-size: 14px;">
+        <li>On the <b>server</b> device, press the "change mode" button</li>
+        <li>In the prompt type in the client ID from the Peer ID area</li>
+        <li>Press ok, it should prompt you to select a screen to share (to share audio, and for you security, we only share a small 2x2 pixel area to keep your stuff private) and make sure to check <b>share audio</b></li>
+        <li>Correct the input and output devices settings (using relaod devices button if needed)</li>
+        <li>Return to your client device and click play on the play box</li>
+        <li>Click play on the server and select the virtual audio cable device if you would like to use the wireless microphone too</li>
+      </ol>
+      <h3>Notes</h3>
+      <ol style="font-size: 14px;">
+        <li><b>How do I get microphone from my wireless device?</b>In order to use the microphone from your device, you need to download <a href="https://www.vb-audio.com/Cable/">VB-Cable</a>. Then, ensure your device has the appropriate microphone selected (iPhones should see iPhone Microphone, not default device or something best to "Reload Devices" first). Finally, on the server side play the audio player like you did on your client device, and select the new Virtual Audio Cable, and either set it as the default recording device or select it individually on each application.</li>
+        <li><b>Is the information transmitted encrypted?</b>This is mostly a hobby project so this should only be used for non-sensitive things - no encryption is (as far as I know) used, so don't transmit sensitive data. However, rest assured the data is not going through any server (hence peer-to-peer), however it does make use of public PeerJS server to discover peers/locate peers.</li>
+        <li><b>Does this work from mobile to website?</b>It also appears that streaming from mobile (for obvious reasons) does not work (at least from iOS to anything else since that is what I tested).</li>
+      </ol>
+    </div>
+    <div id="logger-window" style="width: 100%; position: fixed; bottom: 0; right: 0; width: 300px; height: 2rem; background-color: white; border: 1px solid black; margin-right: 25px; padding: 15px; overflow: scroll; transition: height 1s;">
+      <h2 style="margin-bottom: 0; margin-top: 0.25rem; cursor: grab;" onclick="wp_tdl();">Debug logs (mostly for mobile)</h2>
+      <hr/>
+      <div id="logs" style="text-align: left; font-size: 10px;"></div>
+    </div>
+  </div>
+</body>
+<script async>
+  function wp_tdl() {
+    let logs = document.getElementById("logger-window");
+    console.log(logs);
+    if(logs.style.height == "2rem") {
+      logs.style.height = "20rem";
+    } else {
+      logs.style.height = "2rem";
+    }
+  }
+  function wp_visual_add_to_log(obj) {
+    let logobj = document.getElementById("logs");
+    logobj.innerHTML = obj + "<br />" + logobj.innerHTML;
+  }
+
+  (function() { // in-site logs.
+    var olog = console.log;
+    console.log = function(message) {
+      olog(message);
+      try {
+        wp_visual_add_to_log("[Info] " + ((typeof message == 'object') ? (JSON && JSON.stringify ? JSON.stringify(message) : message) : (message)));
+      } catch(e) {
+        olog("LOG ERROR: " + e);
+      }
+    };
+    var oerror = console.error;
+    console.error = function(message) {
+      oerror(message);
+      try {
+        wp_visual_add_to_log("[Error] " + ((typeof message == 'object') ? (JSON && JSON.stringify ? JSON.stringify(message) : message) : (message)));
+      } catch(e) {
+        oerror("LOG ERROR: " + e);
+      }
+    };
+    var owarn = console.error;
+    console.error = function(message) {
+      owarn(message);
+      try {
+        wp_visual_add_to_log("[Warn] " + ((typeof message == 'object') ? (JSON && JSON.stringify ? JSON.stringify(message) : message) : (message)));
+      } catch(e) {
+        owarn("LOG ERROR: " + e);
+      }
+    };
+  })();
+  var wp_pid = "pending";
+  var wp_peer = null;
+  var wp_display_media_properties = {
+  // minimize video cpu overhead, chrome does not yet support having audio-only streams
+      video: {
+        width: 2,
+        height: 2,
+        frameRate: {
+          ideal: 1
+        }
+      },
+      audio: {
+        sampleRate: 48000,
+        sampleSize: 16,
+        latency: 0,
+        channelCount: 2, // chrome does not yet support having two channels, probably a problem
+        noiseSuppression: false,
+        autoGainControl: false,
+        echoCancellation: false,
+        googAutoGainControl: false
+      }
+  };
+  function wp_randomID() {
+    return Math.random().toString(36).substring(2, 7);
+  }
+  function wp_visual_setMode(mode) {
+    document.querySelectorAll("#mode")[0].innerHTML = mode;
+  }
+  function wp_status(status, alsopassto = console.log) {
+    alsopassto(status);
+    wp_visual_setMode(status);
+  }
+  function wp_visual_setPeerID(id) {
+    document.querySelectorAll("#id")[0].innerHTML = "Peer ID: " + id;
+  }
+  function wp_visual_setRemoteID(id) {
+    document.querySelectorAll("#remoteID")[0].innerHTML = "Remote ID: " + id; 
+  }
+  function wp_newSession() {
+    wp_pid = wp_randomID();
+    wp_peer = new Peer(wp_pid);
+    wp_visual_setPeerID(wp_pid);
+    return wp_peer;
+  }
+  var test = null;
+  var test1 = null;
+  async function wp_startServer(pid, peerOBJ) {
+    wp_visual_setMode("server");
+    wp_status("Server mode, getting screen system audio grab permissions");
+    let mediasrc = await navigator.mediaDevices.getDisplayMedia(wp_display_media_properties);
+    var strmo = document.getElementById("stream"); // set our player as the stream player until peer call answers.
+    strmo.srcObject = mediasrc;
+    wp_status("Calling peer");
+    var peercall = peerOBJ.call(pid, mediasrc);
+    wp_visual_setRemoteID(pid);
+    peerOBJ.on('stream', function(remoteStream) {
+      wp_status("Peer answered, sending stream... ");
+      console.log(remoteStream);
+      document.getElementById("stream").srcObject = remoteStream;
+      wp_status("Live!");
+    });
+    peerOBJ.on('close', function(remoteStream) {
+      wp_status('Closed.');
+    });
+    peerOBJ.on('error', function(err) {
+      wp_status("Closed with error: " + err);
+    });
+  }
+  async function wp_startClient(peerOBJ) {
+    wp_visual_setMode("client");
+    wp_status("Client mode, requesting permissions for microphone (optional)");
+    try { navigator.mediaDevices.getUserMedia({ audio:true }); } catch(err) { console.log("Failed to get perms."); console.log(err); }
+    wp_status("Permissions check complete, waiting for server");
+    var callListen = peerOBJ.on("call", function (caller) {
+      wp_status("Receiving call");
+      console.log(caller);
+      var cbSuc = function(stream) { // after getting microphone
+        wp_status("Answering call...");
+        caller.answer(stream);
+        caller.on("stream", function (remoteStream) {
+          wp_status("Stream incoming...");
+          wp_visual_setRemoteID(caller.peer);
+          wp_status("Receiving stream... " + remoteStream);
+          var streamo = document.getElementById("stream");
+          streamo.srcObject = remoteStream;
+          streamo.play();
+          wp_status("Live! (0)");
+        });
+      };
+      var cbErr = function(err) {
+        cbSuc(err);
+        wp_status("Live! (1)");
+        console.log("Error occurred in answering call while getting microphone permissions");
+        console.err(err);
+      };
+      if(navigator.getUserMedia) {
+        console.log("Reuqesting microphone using standard method");
+        navigator.getUserMedia({ video: false, audio: true }, cbSuc, cbErr);
+      } else {
+        console.log("Requesting microphone using iOS method");
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(cbSuc).catch(cbErr);
+      }
+    }); 
+  }
+  async function start() {
+    wp_status("Obtaining new peer session.");
+    let prs = wp_newSession();
+    wp_status("Waiting for user to answer prompt");
+    let promptResponse = prompt("Please enter peer id, if this is a server leave this blank.");
+    let mode = promptResponse != "" ? "server" : "local";
+    wp_visual_setMode(mode);
+    if(mode == "") {
+      await wp_startServer(promptResponse, prs);
+    } else {
+      await wp_startClient(prs);
+    }
+    reloadDevs();
+  }
+  var outputSelect = document.querySelectorAll("#output")[0];
+  var inputSelect = document.querySelectorAll("#input")[0];
+  async function devup() {
+    let dest = outputSelect.value;
+    await document.getElementById("stream").setSinkId(dest);
+    console.log("sink set. -> " + dest);
+  }
+  var devs = null;
+  var umed = null;
+  async function reloadDevs() {
+    //outputSelect.onchange = undefined;
+    await devices();
+    outputSelect.innerHTML = "";
+    inputSelect.innerHTML = "";
+    for (let i = 0; i !== devs.length; i++) {
+      let tdev = devs[i];
+      let opt = document.createElement("option");
+      opt.value = tdev.deviceId;
+      let kind = tdev.kind;
+      if (kind === "audioinput") {
+        opt.text = tdev.label || "mic index " + i;
+        inputSelect.appendChild(opt);
+      } else if (kind === "audiooutput") {
+        opt.text = tdev.label || "mic index " + i;
+        outputSelect.appendChild(opt);
+      } else if (kind === "videoinput") {
+        console.log("Unknown: " + tdev);
+      }
+      console.log("Device: " + JSON.stringify(tdev));
+    }
+    outputSelect.onchange = devup;
+    //inputSelect.onchange = somethingelse;
+  }
+  async function userMedia() {
+    let constraints = {
+      audio: {},
+      video: {}
+    };
+    umed = await navigator.mediaDevices.getUserMedia(constraints);
+    window.stream = umed;
+    return umed;
+  }
+  async function devices() {
+    //await userMedia();
+    devs = await navigator.mediaDevices.enumerateDevices();
+    return devs;
+  }
+  reloadDevs();
+  //window.addEventListener("load", start);
+  //start();
+</script>
+
+</html>

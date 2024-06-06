@@ -1,0 +1,6 @@
+.cache
+.config
+.wrangler
+node_modules
+replit*
+.replit
